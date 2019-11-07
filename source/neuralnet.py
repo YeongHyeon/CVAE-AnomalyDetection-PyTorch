@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
 class NeuralNet(object):
@@ -32,7 +31,7 @@ class NeuralNet(object):
         print("The number of parameters: %d" %(self.num_params))
 
         self.params = list(self.encoder.parameters()) + list(self.decoder.parameters())
-        self.optimizer = optim.SGD(self.params, lr=1e-5)
+        self.optimizer = optim.Adam(self.params, lr=self.learning_rate)
 
 class Flatten(nn.Module):
     def forward(self, input):
@@ -48,14 +47,19 @@ class Encoder(nn.Module):
 
         self.en_conv = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.CELU(),
             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
             nn.MaxPool2d(2),
+            
             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.CELU(),
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
             nn.MaxPool2d(2),
+
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.CELU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
         )
@@ -69,8 +73,10 @@ class Encoder(nn.Module):
 
     def split_z(self, z):
 
-        z_mu = torch.clamp(z[:, :self.z_dim], min=-3, max=3)
-        z_sigma = torch.clamp(z[:, self.z_dim:], min=-3, max=3)
+        z_mu = z[:, :self.z_dim]
+        # z_mu = torch.clamp(z[:, :self.z_dim], min=-3+(1e-12), max=3-(1e-12))
+        z_sigma = z[:, self.z_dim:]
+        z_sigma = torch.clamp(z_sigma, min=1e-12, max=1-(1e-12))
 
         return z_mu, z_sigma
 
@@ -99,19 +105,28 @@ class Decoder(nn.Module):
 
         self.de_dense = nn.Sequential(
             nn.Linear(self.z_dim, 512),
+            nn.CELU(),
             nn.Linear(512, (self.height//(2**2))*(self.width//(2**2))*self.channel*64),
             nn.CELU(),
         )
 
         self.de_conv = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.CELU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
-            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=self.ksize, stride=2, padding=self.ksize//2),
+
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.CELU(),
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
-            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=self.ksize, stride=2, padding=self.ksize//2),
-            nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=2, padding=self.ksize//2),
+
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.CELU(),
+            nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.CELU(),
             nn.Conv2d(in_channels=16, out_channels=1, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.Sigmoid(),
         )

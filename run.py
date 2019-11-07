@@ -16,7 +16,7 @@ def main():
 
     neuralnet = nn.NeuralNet(height=dataset.height, width=dataset.width, channel=dataset.channel, \
         device=device, ngpu=FLAGS.ngpu, \
-        ksize=FLAGS.ksize, z_dim=FLAGS.z_dim,learning_rate=FLAGS.lr)
+        ksize=FLAGS.ksize, z_dim=FLAGS.z_dim, learning_rate=FLAGS.lr)
 
     solver.training(neuralnet=neuralnet, dataset=dataset, epochs=FLAGS.epoch, batch_size=FLAGS.batch)
     solver.test(neuralnet=neuralnet, dataset=dataset)

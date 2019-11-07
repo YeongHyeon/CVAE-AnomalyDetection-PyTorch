@@ -3,6 +3,7 @@ import os, glob, inspect, time, math, torch
 import numpy as np
 import matplotlib.pyplot as plt
 
+from torch.nn import functional as F
 from sklearn.decomposition import PCA
 from torch.utils.tensorboard import SummaryWriter
 
@@ -115,15 +116,18 @@ def save_graph(contents, xlabel, ylabel, savename):
 
 def torch2npy(input):
 
+    input = input.cpu()
     output = input.detach().numpy()
     return output
 
 def loss_functions(x, x_hat, mu, sigma):
 
-    restore_error = -torch.sum(x * torch.log(x_hat + 1e-12) + (1 - x) * torch.log(1 - x_hat + 1e-12))
-    kl_divergence = 0.5 * torch.sum(mu**2 + sigma**2 - torch.log(sigma**2 + 1e-12) - 1)
+    x, x_hat, mu, sigma = x.cpu(), x_hat.cpu(), mu.cpu(), sigma.cpu()
 
-    return  restore_error + kl_divergence, restore_error, kl_divergence
+    restore_error = -torch.sum(x * torch.log(x_hat + 1e-12) + (1 - x) * torch.log(1 - x_hat + 1e-12), dim=(1, 2, 3))
+    kl_divergence = 0.5 * torch.sum(mu**2 + sigma**2 - torch.log(sigma**2 + 1e-12) - 1, dim=(1))
+
+    return torch.mean(restore_error + kl_divergence), torch.mean(restore_error), torch.mean(kl_divergence)
 
 def training(neuralnet, dataset, epochs, batch_size):
 
@@ -148,7 +152,7 @@ def training(neuralnet, dataset, epochs, batch_size):
         x_restore = neuralnet.decoder(z_enc.to(neuralnet.device))
 
         z_enc = torch2npy(z_enc)
-        x_restore = np.transpose(torch2npy(x_restore.cpu()), (0, 2, 3, 1))
+        x_restore = np.transpose(torch2npy(x_restore), (0, 2, 3, 1))
 
         if(neuralnet.z_dim == 2):
             latent_plot(latent=z_enc, y=y_tr, n=dataset.num_class, \
@@ -189,7 +193,7 @@ def training(neuralnet, dataset, epochs, batch_size):
             neuralnet.optimizer.step()
 
             z_enc = torch2npy(z_enc)
-            x_hat = np.transpose(torch2npy(x_hat.cpu()), (0, 2, 3, 1))
+            x_hat = np.transpose(torch2npy(x_hat), (0, 2, 3, 1))
 
             list_recon.append(restore_error.item())
             list_kld.append(kl_divergence.item())
@@ -274,7 +278,7 @@ def test(neuralnet, dataset):
         score_anomaly = restore_error.item()
 
         z_enc = torch2npy(z_enc)
-        x_hat = np.transpose(torch2npy(x_hat.cpu()), (0, 2, 3, 1))
+        x_hat = np.transpose(torch2npy(x_hat), (0, 2, 3, 1))
 
         loss4box[y_te[0]].append(score_anomaly)
 
