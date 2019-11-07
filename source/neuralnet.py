@@ -17,8 +17,9 @@ class NeuralNet(object):
         self.decoder = \
             Decoder(height=self.height, width=self.width, channel=self.channel, \
             ngpu=self.ngpu, ksize=self.ksize, z_dim=self.z_dim).to(self.device)
-        if(self.device.type == 'cuda') and (self.model.ngpu > 0):
+        if(self.device.type == 'cuda') and (self.encoder.ngpu > 0):
             self.encoder = nn.DataParallel(self.encoder, list(range(self.encoder.ngpu)))
+        if(self.device.type == 'cuda') and (self.decoder.ngpu > 0):
             self.decoder = nn.DataParallel(self.decoder, list(range(self.decoder.ngpu)))
 
         num_params = 0
