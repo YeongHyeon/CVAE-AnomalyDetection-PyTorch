@@ -17,17 +17,19 @@ class NeuralNet(object):
         self.decoder = \
             Decoder(height=self.height, width=self.width, channel=self.channel, \
             ngpu=self.ngpu, ksize=self.ksize, z_dim=self.z_dim).to(self.device)
-        if(self.device.type == 'cuda') and (self.encoder.ngpu > 0):
-            self.encoder = nn.DataParallel(self.encoder, list(range(self.encoder.ngpu)))
-        if(self.device.type == 'cuda') and (self.decoder.ngpu > 0):
-            self.decoder = nn.DataParallel(self.decoder, list(range(self.decoder.ngpu)))
 
-        num_params = 0
-        for model in [self.encoder, self.decoder]:
+        self.models = [self.encoder, self.decoder]
+
+        for idx_m, model in enumerate(self.models):
+            if(self.device.type == 'cuda') and (self.models[idx_m].ngpu > 0):
+                self.models[idx_m] = nn.DataParallel(self.models[idx_m], list(range(self.models[idx_m].ngpu)))
+
+        self.num_params = 0
+        for idx_m, model in enumerate(self.models):
             for p in model.parameters():
-                num_params += p.numel()
+                self.num_params += p.numel()
             print(model)
-        print("The number of parameters: %d" %(num_params))
+        print("The number of parameters: %d" %(self.num_params))
 
         self.params = list(self.encoder.parameters()) + list(self.decoder.parameters())
         self.optimizer = optim.SGD(self.params, lr=1e-5)
@@ -44,16 +46,21 @@ class Encoder(nn.Module):
         self.height, self.width, self.channel = height, width, channel
         self.ngpu, self.ksize, self.z_dim = ngpu, ksize, z_dim
 
-        self.encoder = nn.Sequential(
+        self.en_conv = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
+            nn.MaxPool2d(2),
             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
+            nn.MaxPool2d(2),
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
+        )
+
+        self.en_dense = nn.Sequential(
             Flatten(),
             nn.Linear((self.height//(2**2))*(self.width//(2**2))*self.channel*64, 512),
             nn.CELU(),
@@ -62,21 +69,21 @@ class Encoder(nn.Module):
 
     def split_z(self, z):
 
-        z_mu = z[:, :self.z_dim]
-        z_sigma = torch.clamp(z[:, self.z_dim:], min=1e-12, max=1-(1e-12))
+        z_mu = torch.clamp(z[:, :self.z_dim], min=-3, max=3)
+        z_sigma = torch.clamp(z[:, self.z_dim:], min=-3, max=3)
 
         return z_mu, z_sigma
 
     def sample_z(self, mu, sigma):
 
-        std = torch.exp(0.5*logvar)
         eps = torch.randn_like(mu)
 
-        return mu + (eps * std)
+        return mu + (eps * sigma)
 
     def forward(self, input):
 
-        z_params = self.encoder(input)
+        convout = self.en_conv(input)
+        z_params = self.en_dense(convout)
         z_mu, z_sigma = self.split_z(z=z_params)
         z_enc = self.sample_z(mu=z_mu, sigma=z_sigma)
 
@@ -90,10 +97,13 @@ class Decoder(nn.Module):
         self.height, self.width, self.channel = height, width, channel
         self.ngpu, self.ksize, self.z_dim = ngpu, ksize, z_dim
 
-        self.decoder = nn.Sequential(
-            nn.Linear(self.z_dim*2, 512),
+        self.de_dense = nn.Sequential(
+            nn.Linear(self.z_dim, 512),
             nn.Linear(512, (self.height//(2**2))*(self.width//(2**2))*self.channel*64),
             nn.CELU(),
+        )
+
+        self.de_conv = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.CELU(),
@@ -108,6 +118,8 @@ class Decoder(nn.Module):
 
     def forward(self, input):
 
-        x_hat = self.decoder(input=input)
+        denseout = self.de_dense(input)
+        denseout_res = denseout.view(denseout.size(0), 64, (self.height//(2**2)), (self.height//(2**2)))
+        x_hat = self.de_conv(denseout_res)
 
         return x_hat

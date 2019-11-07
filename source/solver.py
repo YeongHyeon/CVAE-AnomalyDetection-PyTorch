@@ -1,4 +1,4 @@
-import os, inspect, time, math
+import os, glob, inspect, time, math, torch
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -118,7 +118,7 @@ def torch2npy(input):
     output = input.detach().numpy()
     return output
 
-def loss(x, x_hat, mu, sigma):
+def loss_functions(x, x_hat, mu, sigma):
 
     restore_error = -torch.sum(x * torch.log(x_hat + 1e-12) + (1 - x) * torch.log(1 - x_hat + 1e-12))
     kl_divergence = 0.5 * torch.sum(mu**2 + sigma**2 - torch.log(sigma**2 + 1e-12) - 1)
@@ -140,25 +140,28 @@ def training(neuralnet, dataset, epochs, batch_size):
 
     test_sq = 20
     test_size = test_sq**2
+    list_recon, list_kld, list_total = [], [], []
     for epoch in range(epochs):
 
-        x_tr, y_tr, _ = dataset.next_train(batch_size=test_size, fix=True) # Initial batch
-        print(x_tr)
-        z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr.to(neuralnet.device))
-        print(z_enc)
+        x_tr, x_tr_torch, y_tr, y_tr_torch, _ = dataset.next_train(batch_size=test_size, fix=True) # Initial batch
+        z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr_torch.to(neuralnet.device))
         x_restore = neuralnet.decoder(z_enc.to(neuralnet.device))
-        print(x_restore)
+
+        z_enc = torch2npy(z_enc)
+        x_restore = np.transpose(torch2npy(x_restore.cpu()), (0, 2, 3, 1))
 
         if(neuralnet.z_dim == 2):
-            latent_plot(latent=torch2npy(z_enc), y=torch2npy(y_tr), n=dataset.num_class, \
+            latent_plot(latent=z_enc, y=y_tr, n=dataset.num_class, \
                 savename=os.path.join("results", "tr_latent", "%08d.png" %(epoch)))
         else:
             pca = PCA(n_components=2)
-            pca_features = pca.fit_transform(torch2npy(z_enc))
-            latent_plot(latent=pca_features, y=y_tr, n=dataset.num_class, \
+            try:
+                pca_features = pca.fit_transform(z_enc)
+                latent_plot(latent=pca_features, y=y_tr, n=dataset.num_class, \
                 savename=os.path.join("results", "tr_latent", "%08d.png" %(epoch)))
+            except: pass
 
-        save_img(contents=[torch2npy(x_tr), torch2npy(x_restore), (torch2npy(x_tr)-torch2npy(x_restore))**2], \
+        save_img(contents=[x_tr, x_restore, (x_tr-x_restore)**2], \
             names=["Input\n(x)", "Restoration\n(x to x-hat)", "Difference"], \
             savename=os.path.join("results", "tr_resotring", "%08d.png" %(epoch)))
 
@@ -172,32 +175,37 @@ def training(neuralnet, dataset, epochs, batch_size):
                     if(z_latents is None): z_latents = z_latent
                     else: z_latents = np.append(z_latents, z_latent, axis=0)
             x_samples = neuralnet.decoder(torch.from_numpy(z_latents).to(neuralnet.device))
-            plt.imsave(os.path.join("results", "tr_latent_walk", "%08d.png" %(epoch)), dat2canvas(data=torch2npy(x_samples)))
+            plt.imsave(os.path.join("results", "tr_latent_walk", "%08d.png" %(epoch)), dat2canvas(data=x_samples))
 
         while(True):
-            x_tr, y_tr, terminator = dataset.next_train(batch_size) # y_tr does not used in this prj.
+            x_tr, x_tr_torch, y_tr, y_tr_torch, terminator = dataset.next_train(batch_size) # y_tr does not used in this prj.
 
-            z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr.to(neuralnet.device))
+            z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr_torch.to(neuralnet.device))
             x_hat = neuralnet.decoder(z_enc.to(neuralnet.device))
 
-            loss, restore_error, kl_divergence = loss(x=x_tr, x_hat=x_hat, mu=z_mu, sigma=z_sigma)
-            loss.backward()
+            tot_loss, restore_error, kl_divergence = \
+                loss_functions(x=x_tr_torch, x_hat=x_hat, mu=z_mu, sigma=z_sigma)
+            tot_loss.backward()
             neuralnet.optimizer.step()
+
+            z_enc = torch2npy(z_enc)
+            x_hat = np.transpose(torch2npy(x_hat.cpu()), (0, 2, 3, 1))
 
             list_recon.append(restore_error.item())
             list_kld.append(kl_divergence.item())
-            list_total.append(loss.item())
+            list_total.append(tot_loss.item())
 
             writer.add_scalar('VAE/restore_error', restore_error, iteration)
             writer.add_scalar('VAE/kl_divergence', kl_divergence, iteration)
-            writer.add_scalar('VAE/loss_total', loss, iteration)
+            writer.add_scalar('VAE/loss_total', tot_loss, iteration)
 
             iteration += 1
             if(terminator): break
 
         print("Epoch [%d / %d] (%d iteration)  Restore:%.3f, KLD:%.3f, Total:%.3f" \
-            %(epoch, epochs, iteration, restore_error, kl_divergence, loss))
-        torch.save(neuralnet.model.state_dict(), PACK_PATH+"/runs/params")
+            %(epoch, epochs, iteration, restore_error, kl_divergence, tot_loss))
+        for idx_m, model in enumerate(neuralnet.models):
+            torch.save(model.state_dict(), PACK_PATH+"/runs/params-%d" %(idx_m))
 
     elapsed_time = time.time() - start_time
     print("Elapsed: "+str(elapsed_time))
@@ -206,33 +214,101 @@ def training(neuralnet, dataset, epochs, batch_size):
     save_graph(contents=list_kld, xlabel="Iteration", ylabel="KL-Divergence", savename="kl_divergence")
     save_graph(contents=list_total, xlabel="Iteration", ylabel="Total Loss", savename="loss_total")
 
-def validation(neuralnet, dataset):
+def test(neuralnet, dataset):
 
-    if(os.path.exists(PACK_PATH+"/runs/params")):
-        neuralnet.model.load_state_dict(torch.load(PACK_PATH+"/runs/params"))
-        neuralnet.model.eval()
+    param_paths = glob.glob(os.path.join(PACK_PATH, "runs", "params*"))
+    param_paths.sort()
 
-    makedir(PACK_PATH+"/test")
-    makedir(PACK_PATH+"/test/reconstruction")
+    if(len(param_paths) > 0):
+        for idx_p, param_path in enumerate(param_paths):
+            print(PACK_PATH+"/runs/params-%d" %(idx_p))
+            neuralnet.models[idx_p].load_state_dict(torch.load(PACK_PATH+"/runs/params-%d" %(idx_p)))
+            neuralnet.models[idx_p].eval()
 
-    start_time = time.time()
-    print("\nValidation")
-    for tidx in range(dataset.amount_te):
+    print("\nTest...")
 
-        X_te, Y_te, X_te_t, Y_te_t = dataset.next_test()
-        if(X_te is None): break
+    make_dir(path="test")
+    result_list = ["inbound", "outbound"]
+    for result_name in result_list: make_dir(path=os.path.join("test", result_name))
 
-        img_recon = neuralnet.model(X_te_t.to(neuralnet.device))
-        tmp_psnr = psnr(input=X_te_t.to(neuralnet.device), target=img_recon.to(neuralnet.device)).item()
-        img_recon = np.transpose(torch2npy(img_recon.cpu()), (0, 2, 3, 1))
+    scores_normal, scores_abnormal = [], []
+    while(True):
+        x_te, x_te_torch, y_te, y_te_torch, terminator = dataset.next_test(1) # y_te does not used in this prj.
 
-        img_recon = np.squeeze(img_recon, axis=0)
-        plt.imsave("%s/test/reconstruction/%d_psnr_%d.png" %(PACK_PATH, tidx, int(tmp_psnr)), img_recon)
+        z_enc, z_mu, z_sigma = neuralnet.encoder(x_te_torch.to(neuralnet.device))
+        x_hat = neuralnet.decoder(z_enc.to(neuralnet.device))
 
-        img_input = np.squeeze(X_te, axis=0)
-        img_ground = np.squeeze(Y_te, axis=0)
-        plt.imsave("%s/test/bicubic.png" %(PACK_PATH), img_input)
-        plt.imsave("%s/test/high-resolution.png" %(PACK_PATH), img_ground)
+        tot_loss, restore_error, kl_divergence = \
+            loss_functions(x=x_te_torch, x_hat=x_hat, mu=z_mu, sigma=z_sigma)
+        score_anomaly = restore_error.item()
 
-    elapsed_time = time.time() - start_time
-    print("Elapsed: "+str(elapsed_time))
+        if(y_te == 1): scores_normal.append(score_anomaly)
+        else: scores_abnormal.append(score_anomaly)
+
+        if(terminator): break
+
+    scores_normal = np.asarray(scores_normal)
+    scores_abnormal = np.asarray(scores_abnormal)
+    normal_avg, normal_std = np.average(scores_normal), np.std(scores_normal)
+    abnormal_avg, abnormal_std = np.average(scores_abnormal), np.std(scores_abnormal)
+    print("Noraml  avg: %.5f, std: %.5f" %(normal_avg, normal_std))
+    print("Abnoraml  avg: %.5f, std: %.5f" %(abnormal_avg, abnormal_std))
+    outbound = normal_avg + (normal_std * 3)
+    print("Outlier boundary of normal data: %.5f" %(outbound))
+
+    histogram(contents=[scores_normal, scores_abnormal], savename="histogram-test.png")
+
+    fcsv = open("test-summary.csv", "w")
+    fcsv.write("class, loss, outlier\n")
+    testnum = 0
+    z_enc_tot, y_te_tot = None, None
+    loss4box = [[], [], [], [], [], [], [], [], [], []]
+    while(True):
+        x_te, x_te_torch, y_te, y_te_torch, terminator = dataset.next_test(1) # y_te does not used in this prj.
+
+        z_enc, z_mu, z_sigma = neuralnet.encoder(x_te_torch.to(neuralnet.device))
+        x_hat = neuralnet.decoder(z_enc.to(neuralnet.device))
+
+        tot_loss, restore_error, kl_divergence = \
+            loss_functions(x=x_te_torch, x_hat=x_hat, mu=z_mu, sigma=z_sigma)
+        score_anomaly = restore_error.item()
+
+        z_enc = torch2npy(z_enc)
+        x_hat = np.transpose(torch2npy(x_hat.cpu()), (0, 2, 3, 1))
+
+        loss4box[y_te[0]].append(score_anomaly)
+
+        if(z_enc_tot is None):
+            z_enc_tot = z_enc
+            y_te_tot = y_te
+        else:
+            z_enc_tot = np.append(z_enc_tot, z_enc, axis=0)
+            y_te_tot = np.append(y_te_tot, y_te, axis=0)
+
+        outcheck = score_anomaly > outbound
+        fcsv.write("%d, %.3f, %r\n" %(y_te, score_anomaly, outcheck))
+
+        [h, w, c] = x_te[0].shape
+        canvas = np.ones((h, w*3, c), np.float32)
+        canvas[:, :w, :] = x_te[0]
+        canvas[:, w:w*2, :] = x_hat[0]
+        canvas[:, w*2:, :] = (x_te[0]-x_hat[0])**2
+        if(outcheck):
+            plt.imsave(os.path.join("test", "outbound", "%08d-%08d.png" %(testnum, int(score_anomaly))), gray2rgb(gray=canvas))
+        else:
+            plt.imsave(os.path.join("test", "inbound", "%08d-%08d.png" %(testnum, int(score_anomaly))), gray2rgb(gray=canvas))
+
+        testnum += 1
+
+        if(terminator): break
+
+    boxplot(contents=loss4box, savename="test-box.png")
+
+    if(neuralnet.z_dim == 2):
+        latent_plot(latent=z_enc_tot, y=y_te_tot, n=dataset.num_class, \
+            savename=os.path.join("test-latent.png"))
+    else:
+        pca = PCA(n_components=2)
+        pca_features = pca.fit_transform(z_enc_tot)
+        latent_plot(latent=pca_features, y=y_te_tot, n=dataset.num_class, \
+            savename=os.path.join("test-latent.png"))
