@@ -46,28 +46,28 @@ class Encoder(nn.Module):
         self.ngpu, self.ksize, self.z_dim = ngpu, ksize, z_dim
 
         self.en_conv = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.Conv2d(in_channels=self.channel, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.ReLU(),
             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
             nn.MaxPool2d(2),
-            
+
             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
             nn.MaxPool2d(2),
 
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
         )
 
         self.en_dense = nn.Sequential(
             Flatten(),
             nn.Linear((self.height//(2**2))*(self.width//(2**2))*self.channel*64, 512),
-            nn.CELU(),
+            nn.ReLU(),
             nn.Linear(512, self.z_dim*2),
         )
 
@@ -105,29 +105,29 @@ class Decoder(nn.Module):
 
         self.de_dense = nn.Sequential(
             nn.Linear(self.z_dim, 512),
-            nn.CELU(),
+            nn.ReLU(),
             nn.Linear(512, (self.height//(2**2))*(self.width//(2**2))*self.channel*64),
-            nn.CELU(),
+            nn.ReLU(),
         )
 
         self.de_conv = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
 
             nn.Upsample(scale_factor=2),
             nn.Conv2d(in_channels=64, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
 
             nn.Upsample(scale_factor=2),
             nn.Conv2d(in_channels=32, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
+            nn.ReLU(),
             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.CELU(),
-            nn.Conv2d(in_channels=16, out_channels=1, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=16, out_channels=self.channel, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.Sigmoid(),
         )
 
