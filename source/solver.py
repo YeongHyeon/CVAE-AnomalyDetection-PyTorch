@@ -175,10 +175,11 @@ def training(neuralnet, dataset, epochs, batch_size):
             z_latents = None
             for y_loc, y_val in enumerate(y_values):
                 for x_loc, x_val in enumerate(x_values):
-                    z_latent = np.reshape(np.array([y_val, x_val]), (1, neuralnet.z_dim))
+                    z_latent = np.reshape(np.array([y_val, x_val], dtype=np.float32), (1, neuralnet.z_dim))
                     if(z_latents is None): z_latents = z_latent
                     else: z_latents = np.append(z_latents, z_latent, axis=0)
             x_samples = neuralnet.decoder(torch.from_numpy(z_latents).to(neuralnet.device))
+            x_samples = np.transpose(torch2npy(x_samples), (0, 2, 3, 1))
             plt.imsave(os.path.join("results", "tr_latent_walk", "%08d.png" %(epoch)), dat2canvas(data=x_samples))
 
         while(True):
@@ -186,8 +187,6 @@ def training(neuralnet, dataset, epochs, batch_size):
 
             z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr_torch.to(neuralnet.device))
             x_hat = neuralnet.decoder(z_enc.to(neuralnet.device))
-
-
 
             tot_loss, restore_error, kl_divergence = \
                 loss_functions(x=x_tr_torch, x_hat=x_hat, mu=z_mu, sigma=z_sigma)
