@@ -47,27 +47,27 @@ class Encoder(nn.Module):
 
         self.en_conv = nn.Sequential(
             nn.Conv2d(in_channels=self.channel, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
             nn.MaxPool2d(2),
 
             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
             nn.MaxPool2d(2),
 
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
         )
 
         self.en_dense = nn.Sequential(
             Flatten(),
             nn.Linear((self.height//(2**2))*(self.width//(2**2))*self.channel*64, 512),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(512, self.z_dim*2),
         )
 
@@ -76,15 +76,16 @@ class Encoder(nn.Module):
         z_mu = z[:, :self.z_dim]
         # z_mu = torch.clamp(z[:, :self.z_dim], min=-3+(1e-12), max=3-(1e-12))
         z_sigma = z[:, self.z_dim:]
-        # z_sigma = torch.clamp(z_sigma, min=1e-12, max=1-(1e-12))
+#         z_sigma = torch.clamp(z_sigma, min=1e-12, max=1-(1e-12))
 
         return z_mu, z_sigma
 
     def sample_z(self, mu, sigma):
 
-        eps = torch.randn_like(mu)
+        epsilon = torch.randn_like(mu)
+        sample = mu + (sigma * epsilon)
 
-        return mu + (eps * sigma)
+        return sample
 
     def forward(self, input):
 
@@ -105,30 +106,28 @@ class Decoder(nn.Module):
 
         self.de_dense = nn.Sequential(
             nn.Linear(self.z_dim, 512),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(512, (self.height//(2**2))*(self.width//(2**2))*self.channel*64),
-            nn.ReLU(),
+            nn.ELU(),
         )
 
         self.de_conv = nn.Sequential(
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
 
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=self.ksize+1, stride=2, padding=1),
+            nn.ELU(),
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
 
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=32, out_channels=16, kernel_size=self.ksize+1, stride=2, padding=1),
+            nn.ELU(),
             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Conv2d(in_channels=16, out_channels=self.channel, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            # nn.Sigmoid(),
+            nn.Sigmoid(),
         )
 
     def forward(self, input):
@@ -136,6 +135,5 @@ class Decoder(nn.Module):
         denseout = self.de_dense(input)
         denseout_res = denseout.view(denseout.size(0), 64, (self.height//(2**2)), (self.height//(2**2)))
         x_hat = self.de_conv(denseout_res)
-        x_hat = torch.clamp(x_hat, min=1e-12, max=1-(1e-12))
 
         return x_hat

@@ -165,8 +165,6 @@ def training(neuralnet, dataset, epochs, batch_size):
                 savename=os.path.join("results", "tr_latent", "%08d.png" %(epoch)))
             except: pass
 
-        print(x_tr.min(), x_tr.max(), x_tr.mean())
-        print(x_restore.min(), x_restore.max(), x_restore.mean())
         save_img(contents=[x_tr, x_restore, (x_tr-x_restore)**2], \
             names=["Input\n(x)", "Restoration\n(x to x-hat)", "Difference"], \
             savename=os.path.join("results", "tr_resotring", "%08d.png" %(epoch)))
@@ -189,17 +187,21 @@ def training(neuralnet, dataset, epochs, batch_size):
             z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr_torch.to(neuralnet.device))
             x_hat = neuralnet.decoder(z_enc.to(neuralnet.device))
 
+
+
             tot_loss, restore_error, kl_divergence = \
                 loss_functions(x=x_tr_torch, x_hat=x_hat, mu=z_mu, sigma=z_sigma)
+
+            neuralnet.optimizer.zero_grad()
             tot_loss.backward()
             neuralnet.optimizer.step()
-
-            z_enc = torch2npy(z_enc)
-            x_hat = np.transpose(torch2npy(x_hat), (0, 2, 3, 1))
 
             list_recon.append(restore_error.item())
             list_kld.append(kl_divergence.item())
             list_total.append(tot_loss.item())
+
+            z_enc = torch2npy(z_enc)
+            x_hat = np.transpose(torch2npy(x_hat), (0, 2, 3, 1))
 
             writer.add_scalar('VAE/restore_error', restore_error, iteration)
             writer.add_scalar('VAE/kl_divergence', kl_divergence, iteration)
