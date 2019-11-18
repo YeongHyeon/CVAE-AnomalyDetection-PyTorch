@@ -74,9 +74,7 @@ class Encoder(nn.Module):
     def split_z(self, z):
 
         z_mu = z[:, :self.z_dim]
-        # z_mu = torch.clamp(z[:, :self.z_dim], min=-3+(1e-12), max=3-(1e-12))
         z_sigma = z[:, self.z_dim:]
-#         z_sigma = torch.clamp(z_sigma, min=1e-12, max=1-(1e-12))
 
         return z_mu, z_sigma
 
