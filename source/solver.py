@@ -165,6 +165,8 @@ def training(neuralnet, dataset, epochs, batch_size):
                 savename=os.path.join("results", "tr_latent", "%08d.png" %(epoch)))
             except: pass
 
+        print(x_tr.min(), x_tr.max(), x_tr.mean())
+        print(x_restore.min(), x_restore.max(), x_restore.mean())
         save_img(contents=[x_tr, x_restore, (x_tr-x_restore)**2], \
             names=["Input\n(x)", "Restoration\n(x to x-hat)", "Difference"], \
             savename=os.path.join("results", "tr_resotring", "%08d.png" %(epoch)))
@@ -182,7 +184,7 @@ def training(neuralnet, dataset, epochs, batch_size):
             plt.imsave(os.path.join("results", "tr_latent_walk", "%08d.png" %(epoch)), dat2canvas(data=x_samples))
 
         while(True):
-            x_tr, x_tr_torch, y_tr, y_tr_torch, terminator = dataset.next_train(batch_size) # y_tr does not used in this prj.
+            x_tr, x_tr_torch, y_tr, y_tr_torch, terminator = dataset.next_train(batch_size)
 
             z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr_torch.to(neuralnet.device))
             x_hat = neuralnet.decoder(z_enc.to(neuralnet.device))

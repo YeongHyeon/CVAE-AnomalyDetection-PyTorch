@@ -76,7 +76,7 @@ class Encoder(nn.Module):
         z_mu = z[:, :self.z_dim]
         # z_mu = torch.clamp(z[:, :self.z_dim], min=-3+(1e-12), max=3-(1e-12))
         z_sigma = z[:, self.z_dim:]
-        z_sigma = torch.clamp(z_sigma, min=1e-12, max=1-(1e-12))
+        # z_sigma = torch.clamp(z_sigma, min=1e-12, max=1-(1e-12))
 
         return z_mu, z_sigma
 
@@ -128,7 +128,7 @@ class Decoder(nn.Module):
             nn.Conv2d(in_channels=16, out_channels=16, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
             nn.ReLU(),
             nn.Conv2d(in_channels=16, out_channels=self.channel, kernel_size=self.ksize, stride=1, padding=self.ksize//2),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
 
     def forward(self, input):
@@ -136,5 +136,6 @@ class Decoder(nn.Module):
         denseout = self.de_dense(input)
         denseout_res = denseout.view(denseout.size(0), 64, (self.height//(2**2)), (self.height//(2**2)))
         x_hat = self.de_conv(denseout_res)
+        x_hat = torch.clamp(x_hat, min=1e-12, max=1-(1e-12))
 
         return x_hat
