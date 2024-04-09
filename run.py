@@ -11,14 +11,20 @@ def main():
 
     dataset = dman.Dataset(normalize=FLAGS.datnorm)
 
-    if(not(torch.cuda.is_available())): FLAGS.ngpu = 0
-    device = torch.device("cuda" if (torch.cuda.is_available() and FLAGS.ngpu > 0) else "cpu")
+    # if(not(torch.cuda.is_available())): FLAGS.ngpu = 0
+    # device = torch.device("cuda" if (torch.cuda.is_available() and FLAGS.ngpu > 0) else "cpu")
+
+    if(torch.backends.mps.is_available()):
+        device = torch.device("mps")
+    else:
+        if(not(torch.cuda.is_available())): ngpu = 0
+        device = torch.device("cuda" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
 
     neuralnet = nn.NeuralNet(height=dataset.height, width=dataset.width, channel=dataset.channel, \
         device=device, ngpu=FLAGS.ngpu, \
         ksize=FLAGS.ksize, z_dim=FLAGS.z_dim, learning_rate=FLAGS.lr)
 
-    solver.training(neuralnet=neuralnet, dataset=dataset, epochs=FLAGS.epoch, batch_size=FLAGS.batch)
+    # solver.training(neuralnet=neuralnet, dataset=dataset, epochs=FLAGS.epoch, batch_size=FLAGS.batch)
     solver.test(neuralnet=neuralnet, dataset=dataset)
 
 if __name__ == '__main__':

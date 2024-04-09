@@ -1,11 +1,14 @@
 import os, glob, inspect, time, math, torch
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from torch.nn import functional as F
 from sklearn.decomposition import PCA
 from torch.utils.tensorboard import SummaryWriter
+
+from sklearn.metrics import roc_curve, auc
 
 PACK_PATH = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))+"/.."
 
@@ -270,6 +273,8 @@ def test(neuralnet, dataset):
     testnum = 0
     z_enc_tot, y_te_tot = None, None
     loss4box = [[], [], [], [], [], [], [], [], [], []]
+    labels = []
+    scores = []
     while(True):
         x_te, x_te_torch, y_te, y_te_torch, terminator = dataset.next_test(1) # y_te does not used in this prj.
 
@@ -284,6 +289,8 @@ def test(neuralnet, dataset):
         x_hat = np.transpose(torch2npy(x_hat), (0, 2, 3, 1))
 
         loss4box[y_te[0]].append(score_anomaly)
+        labels.append(y_te[0]!=1)
+        scores.append(score_anomaly)
 
         if(z_enc_tot is None):
             z_enc_tot = z_enc
@@ -309,6 +316,9 @@ def test(neuralnet, dataset):
 
         if(terminator): break
 
+    auroc_tmp = measure_auroc(labels, scores, savepath=None)
+    print("AUROC %.3f" %(auroc_tmp))
+
     boxplot(contents=loss4box, savename="test-box.png")
 
     if(neuralnet.z_dim == 2):
@@ -319,3 +329,26 @@ def test(neuralnet, dataset):
         pca_features = pca.fit_transform(z_enc_tot)
         latent_plot(latent=pca_features, y=y_te_tot, n=dataset.num_class, \
             savename=os.path.join("test-latent.png"))
+
+def measure_auroc(labels, scores, savepath=None):
+
+    fpr, tpr, thresholds = roc_curve(labels, scores, pos_label=1)
+    auroc = auc(fpr, tpr)
+
+    dic_score = {'Label':labels, 'Loss':scores}
+    df_socre = pd.DataFrame.from_dict(dic_score)
+    df_socre.loc[df_socre['Label'] == 0, 'Label'] = 'Good'
+    df_socre.loc[df_socre['Label'] == 1, 'Label'] = 'Not Good'
+
+    if(not(savepath is None)):
+        plt.figure(figsize=(4, 3), dpi=100)
+        ax1 = plt.subplot(1,1,1)
+
+        ax1.set_title('AUROC: %.5f' %(auroc))
+        sns.violinplot(x="Label", y="Loss", data=df_socre)
+
+        plt.tight_layout()
+        plt.savefig(savepath, transparent=True)
+        plt.close()
+
+    return auroc
