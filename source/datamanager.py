@@ -12,7 +12,8 @@ class Dataset(object):
 
         self.normalize = normalize
 
-        (x_tr, y_tr), (x_te, y_te) = tf.keras.datasets.mnist.load_data()
+        # (x_tr, y_tr), (x_te, y_te) = tf.keras.datasets.mnist.load_data()
+        (x_tr, y_tr), (x_te, y_te) = tf.keras.datasets.fashion_mnist.load_data()
         self.x_tr, self.y_tr = x_tr, y_tr
         self.x_te, self.y_te = x_te, y_te
 
