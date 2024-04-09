@@ -17,29 +17,13 @@ Example of Anomaly Detection using Convolutional Variational Auto-Encoder (CVAE)
 
 ## Results
 
-### Training
-<div align="center">
-  <img src="./figures/restoring.png" width="800">  
-  <p>Restoration result by CVAE.</p>
-</div>
-
-<div align="center">
-  <img src="./figures/latent_tr.png" width="300"><img src="./figures/latent_walk.png" width="250">
-  <p>Latent vector space of training set, and reconstruction result of latent space walking.</p>
-</div>
-
-### Test
-#### z_dim = 2
-<div align="center">
-  <img src="./figures/latent_te_2.png" width="350"><img src="./figures/test-box_2.png" width="400">    
-  <p>Left figure shows latent vector space of test set. Right figure shows box plot with restoration loss of test procedure.</p>
-</div>
-
-#### z_dim = 128
-<div align="center">
-  <img src="./figures/latent_te_128.png" width="350"><img src="./figures/test-box_128.png" width="400"><img src="./figures/histogram-test.png" width="440">
-  <p>Latent vector space of test set, box plot with restoration loss, and histogram of restoration loss.</p>
-</div>
+||MNIST|Fashion-MNIST|
+|:---|:---:|:---:|
+|Reconstruciton of training|<img src="./figures/mnist/restoring.png" width="500">|<img src="./figures/fmnist/restoring.png" width="500">|
+|Latent of training|<img src="./figures/mnist/latent_tr.png" width="500">|<img src="./figures/fmnist/latent_tr.png" width="500">|
+|Latent walk|<img src="./figures/mnist/latent_walk.png" width="500">|<img src="./figures/fmnist/latent_walk.png" width="500">|
+|Latent of test|<img src="./figures/mnist/latent_te_2.png" width="500">|<img src="./figures/fmnist/latent_te_2.png" width="500">|
+|Histogram of test|<img src="./figures/mnist/histogram-test.png" width="500">|<img src="./figures/fmnist/histogram-test.png" width="500">|
 
 ## Environment
 * Python 3.7.4  
