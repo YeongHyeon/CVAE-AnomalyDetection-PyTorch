@@ -187,7 +187,6 @@ def training(neuralnet, dataset, epochs, batch_size):
 
         while(True):
             x_tr, x_tr_torch, y_tr, y_tr_torch, terminator = dataset.next_train(batch_size)
-
             z_enc, z_mu, z_sigma = neuralnet.encoder(x_tr_torch.to(neuralnet.device))
             x_hat = neuralnet.decoder(z_enc.to(neuralnet.device))
 

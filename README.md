@@ -24,6 +24,7 @@ Example of Anomaly Detection using Convolutional Variational Auto-Encoder (CVAE)
 |Latent walk|<img src="./figures/mnist/latent_walk.png" width="500">|<img src="./figures/fmnist/latent_walk.png" width="500">|
 |Latent of test|<img src="./figures/mnist/latent_te_2.png" width="500">|<img src="./figures/fmnist/latent_te_2.png" width="500">|
 |Histogram of test|<img src="./figures/mnist/histogram-test.png" width="500">|<img src="./figures/fmnist/histogram-test.png" width="500">|
+|AUROC|0.997|0.980|
 
 ## Environment
 * Python 3.7.4  
